@@ -68,13 +68,20 @@ def get_transforms(is_train: bool = False):
 
     if is_train:
         return A.Compose([
+            # 1. Geometric & Perspective
+            A.Perspective(scale=(0.05, 0.1), p=0.5),
             A.Rotate(limit=20, p=0.7),
             A.RandomResizedCrop(size=target_size, scale=(0.8, 1.0)),
-            A.HorizontalFlip(p=0.3),
+
+            # 2. Lighting & Color
             A.RandomBrightnessContrast(p=0.5),
+            A.HueSaturationValue(hue_shift_limit=15, sat_shift_limit=20, val_shift_limit=15, p=0.3),
+
+            # 3. Camera Artifacts & Obstructions
             A.GaussNoise(std_range=(0.1, 0.4), p=0.3),
             A.MotionBlur(blur_limit=3, p=0.2),
             A.ImageCompression(quality_range=(70, 100), p=0.3),
+            A.CoarseDropout(num_holes_range=(1,3), hole_height_range=(0.05, 0.15), hole_width_range=(0.05, 0.15), fill='random', p=0.4),
 
             norm_step,
             tensor_step

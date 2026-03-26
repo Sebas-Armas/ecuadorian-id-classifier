@@ -52,4 +52,4 @@ DEVICE_NAME = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'c
 RANDOM_SEED = 120699
 
 # --- Evaluate ---
-CONFIDENCE_THRESHOLD = 0.60
+CONFIDENCE_THRESHOLD = 0.70
