@@ -1,0 +1,26 @@
+{
+  "label_to_name": {
+    "0": "id_new",
+    "1": "id_old",
+    "2": "passport",
+    "3": "unknown"
+  },
+  "name_to_label": {
+    "id_new": 0,
+    "id_old": 1,
+    "passport": 2,
+    "unknown": 3
+  },
+  "num_classes": 4,
+  "image_size": 224,
+  "imagenet_mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "imagenet_std": [
+    0.229,
+    0.224,
+    0.225
+  ]
+}
