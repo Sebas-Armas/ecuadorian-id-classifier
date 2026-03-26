@@ -1,8 +1,8 @@
 # Document Classifier API — Ecuadorian Documents
 
-Flask service that accepts an image and returns the document type + confidence score,
-exactly as specified:
+Flask microservice that accepts an image and returns the document type plus confidence score.
 
+**Response contract:**
 ```json
 {
   "tipo_documento": "cedula | pasaporte | desconocido",
@@ -12,127 +12,211 @@ exactly as specified:
 
 ---
 
-## Project structure
+## Table of Contents
+
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Running the Server](#running-the-server)
+- [API Reference](#api-reference)
+  - [POST /predict](#post-predict)
+  - [GET /health](#get-health)
+- [Web UI](#web-ui)
+- [Integration Examples](#integration-examples)
+- [Error Reference](#error-reference)
+
+---
+
+## Project Structure
 
 ```
-doc_classifier/app
-                ├── app.py               ← Flask app + inference logic
-                ├── requirements.txt
-                │   └── index.html       ← Web UI (drag & drop)
+app/
+├── app.py          ← Flask app + inference logic
 ├── templates/
+│   └── index.html  ← Drag-and-drop web UI
 └── README.md
 ```
 
-The app expects your project's `global/` folder (with `config.py` and `utils.py`)
-two levels above this directory — the same convention used in the notebooks:
+The app resolves shared resources from the project root automatically:
 
 ```
-project_root/
+ecuadorian-id-classifier/   ← project root (two levels up from app/)
 ├── global/
-│   ├── config.py
+│   ├── config.py           ← loaded at startup
 │   └── utils.py
-├── best_model.pth
-└── notebooks/
-    └── doc_classifier/   ← this folder lives here
-        └── app.py
+└── best_model.pth          ← model checkpoint
 ```
+
+---
+
+## Prerequisites
+
+Complete the [root-level setup](../README.md#setup) first so the `ecuadorian-id` conda environment exists and dependencies are installed.
 
 ---
 
 ## Setup
 
-In Root Project:
 ```bash
-pip install -r requirements.txt
+# Activate the project environment (if not already active)
+conda activate ecuadorian-id
 ```
+
+No additional setup is required — the app resolves all paths relative to the repo root at startup.
 
 ---
 
-## Run
+## Running the Server
 
-In app folder:
+From the **project root** or from inside `app/`:
+
 ```bash
+# From project root (recommended)
+conda activate ecuadorian-id
+python app/app.py
+
+# Or from inside app/
+cd app
 python app.py
 ```
 
-Server starts at `http://localhost:5000`.
+The server starts at `http://localhost:5000` in debug mode (`debug=True`, bound to `0.0.0.0:5000`).
+
+> **Production note:** Replace `app.run(debug=True, ...)` with a production WSGI server such as **Gunicorn**:
+> ```bash
+> pip install gunicorn
+> gunicorn -w 2 -b 0.0.0.0:5000 app:app
+> ```
 
 ---
 
-## Usage
+## API Reference
 
-### Web UI
-Open `http://localhost:5000` in your browser — drag & drop an image, click **Clasificar**.
-Enable the **debug** checkbox to see per-class probabilities.
+### POST /predict
 
-### REST API
+Classifies a single document image.
 
-**Endpoint:** `POST /predict`
-**Content-Type:** `multipart/form-data`
-**Field:** `image` (jpg / jpeg / png, max 10 MB)
+| Property | Value |
+|---|---|
+| URL | `POST /predict` |
+| Content-Type | `multipart/form-data` |
+| Field name | `image` |
+| Allowed formats | `jpg`, `jpeg`, `png` |
+| Max file size | 10 MB |
+| Min image size | 50 × 50 px |
 
-#### cURL
-```bash
-curl -X POST http://localhost:5000/predict \
-  -F "image=@/path/to/cedula.jpg"
+#### Success response — `200 OK`
+
+```json
+{
+  "tipo_documento": "cedula",
+  "confianza": 0.9731
+}
 ```
 
-#### Python
-```python
-import requests
+#### Debug response — `200 OK` (append `?debug=1`)
 
-with open("cedula.jpg", "rb") as f:
-    r = requests.post("http://localhost:5000/predict", files={"image": f})
-print(r.json())
-# {"tipo_documento": "cedula", "confianza": 0.9731}
-```
-
-#### With debug info
-```bash
-curl -X POST "http://localhost:5000/predict?debug=1" \
-  -F "image=@/path/to/doc.jpg"
-```
-Returns the spec output plus per-class probabilities:
 ```json
 {
   "tipo_documento": "cedula",
   "confianza": 0.9731,
   "debug": {
-    "cedula_prob": 0.9731,
-    "pasaporte_prob": 0.0214,
+    "cedula_prob":      0.9731,
+    "pasaporte_prob":   0.0214,
     "desconocido_prob": 0.0055,
-    "threshold": 0.6
+    "threshold":        0.7
   }
 }
 ```
 
-#### Health check
+#### cURL
+
 ```bash
-curl http://localhost:5000/health
-# {"status": "ok", "device": "cpu"}
+curl -X POST http://localhost:5000/predict \
+  -F "image=@/path/to/cedula.jpg"
+```
+
+```bash
+# With debug info
+curl -X POST "http://localhost:5000/predict?debug=1" \
+  -F "image=@/path/to/doc.jpg"
+```
+
+#### Python (`requests`)
+
+```python
+import requests
+
+with open("cedula.jpg", "rb") as f:
+    response = requests.post(
+        "http://localhost:5000/predict",
+        files={"image": f},
+    )
+
+print(response.json())
+# {"tipo_documento": "cedula", "confianza": 0.9731}
 ```
 
 ---
 
-## Notes on PHP / .NET Core integration
+### GET /health
 
-Since the role uses PHP and .NET Core, this Flask service acts as a **microservice**.
-You can call it from either stack over HTTP:
+Liveness check — verifies the server is up and reports the active compute device.
 
-**PHP**
+```bash
+curl http://localhost:5000/health
+```
+
+```json
+{"status": "ok", "device": "cpu"}
+```
+
+---
+
+## Web UI
+
+Open `http://localhost:5000` in your browser.
+
+- **Drag & drop** an image (or click to select) and press **Clasificar**.
+- Enable the **debug** checkbox to display per-class probabilities alongside the result.
+
+---
+
+## Integration Examples
+
+### PHP
+
 ```php
 $ch = curl_init('http://localhost:5000/predict');
 curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, ['image' => new CURLFile('/path/to/doc.jpg')]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, [
+    'image' => new CURLFile('/path/to/doc.jpg'),
+]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-$response = json_decode(curl_exec($ch), true);
-// $response['tipo_documento'], $response['confianza']
+$result = json_decode(curl_exec($ch), true);
+
+echo $result['tipo_documento']; // "cedula"
+echo $result['confianza'];      // 0.9731
 ```
 
-**.NET Core (C#)**
+### .NET Core (C#)
+
 ```csharp
 using var form = new MultipartFormDataContent();
 form.Add(new StreamContent(File.OpenRead("doc.jpg")), "image", "doc.jpg");
 var response = await httpClient.PostAsync("http://localhost:5000/predict", form);
-var result = await response.Content.ReadFromJsonAsync<JsonObject>();
+var result   = await response.Content.ReadFromJsonAsync<JsonObject>();
+// result["tipo_documento"], result["confianza"]
 ```
+
+---
+
+## Error Reference
+
+| HTTP Status | Cause |
+|---|---|
+| `400` | Missing `image` field or empty filename |
+| `413` | File exceeds 10 MB |
+| `415` | Unsupported file extension (not jpg/png) |
+| `422` | Corrupt image or image smaller than 50 × 50 px |
+| `500` | Internal inference error |
